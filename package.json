@@ -1,6 +1,6 @@
 {
-  "name": "agentdoor",
-  "version": "0.2.0",
+  "name": "agenthatch",
+  "version": "0.3.0",
   "description": "Controlled test access for AI-assisted application development.",
   "main": "dist/delegation.js",
   "directories": {
@@ -41,6 +41,7 @@
     "node": ">=24 <25"
   },
   "bin": {
+    "agenthatch": "dist/main.js",
     "agentdoor": "dist/main.js"
   },
   "files": [
