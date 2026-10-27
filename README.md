@@ -1,21 +1,12 @@
 # AgentHatch
 
-Controlled test access for AI-assisted application development.
+Controlled test access for AI-assisted application development. Free, open-source developer software under the MIT license. Application owners retain control of identities, permissions and revocation.
 
-A free, MIT-licensed developer library with a local CLI and stdio MCP interface. Application owners control agent identities and access policies. No hosted AgentDoor account or subscription is required.
+## Status: 0.3
 
-The existing `agentdoor` CLI, MCP tool names and SDK exports are retained for compatibility. See [runtime isolation](docs/runtime-isolation.md) before granting access, and [contribution guidelines](CONTRIBUTING.md) before submitting changes. The project does not include a hosted issuer or owner approval console.
+AgentHatch provides an application-side authorization SDK, local CLI and stdio MCP interface. It is not a hosted service, owner console, identity provider or cloud connector. Application-specific approval pages, databases and deployments belong in the consuming application's repository.
 
-## Status: 0.2
-
-Two adapters are available:
-
-- **Delegated access:** an application-side SDK accepts an owner-approved agent identity, establishes a dedicated agent session, enforces application permissions, and revokes server-side sessions.
-- **Legacy Clerk enrollment:** a human signs in once and the tool reuses stored browser state. This adapter does not remotely revoke Clerk sessions or implement application permissions.
-
-Delegated access requires the target application to integrate the SDK. Installing this repository alone cannot grant access to an arbitrary website or create a Clerk account. An AgentDoor principal is a separate application identity; it is not automatically a Clerk user. Keep personal/admin accounts separate.
-
-The signed-login protocol is project-specific, not OAuth or an externally audited standard. Do not treat it as a replacement for a mature identity provider across unrelated third-party services.
+Delegated signed access only. Legacy browser-state enrollment has been removed. Existing SDK class and HTTP route names remain compatible; the `agentdoor` CLI alias is retained alongside `agenthatch`. No real application, owner or tester configuration belongs in this repository.
 
 ## Install
 
@@ -29,94 +20,72 @@ npm run build
 npx playwright install chromium
 ```
 
-No model API key is needed. Applications and external providers may have their own charges. Paid model operations are not enabled by this tool.
+No model API key is required. Paid model operations are not enabled by this library.
 
-## Delegated access: one-time setup
+## Owner-approved access
 
-1. Generate a local agent identity:
+1. The tester generates its keypair in its own trusted runtime:
 
 ```sh
-node dist/main.js identity:init /absolute/private/agentdoor-identity
+node dist/main.js identity:init /absolute/private/agent-identity
 ```
 
-The private key remains in `identity.local.pem` with mode 0600. Only give the application owner the contents of `identity.public.pem`. Never give the model a private key, session cookie, or administrator API key. On Windows, restrict directory/file ACLs to the trusted account; POSIX modes are insufficient.
+Only its public key goes to the application owner. The private key never belongs in chat, Git, CI, a prompt, an environment variable or an agent-readable filesystem. Use a separate trusted signing/browser process. See [runtime isolation](docs/runtime-isolation.md).
 
-2. The application owner installs the SDK and registers a grant binding that public key to a dedicated agent ID, application user ID, explicit scopes and expiry. See [application integration](docs/application-integration.md). This is the human authorization step. The agent cannot register or expand its own grant through MCP.
+2. The application calls `prepareEnrollment({client, project, publicKey, scopes})` and persists the disabled result. A request, signed proof, local configuration or prompt grants no access. Supported enrollment scopes are `workspace:read` and `test-records:write`. The initial lifetime is one hour; applications must cap owner-selected lifetimes at seven days.
 
-3. Create an owner-protected configuration from `examples/delegated-config.json`. Replace the origin, identity path and grant/account identifiers. Run:
+3. The application's human-authenticated owner surface recomputes the fingerprint from the stored public key and displays the exact account, scopes, expiry and paid-model policy. Only an explicitly allowlisted human owner may approve, reject or disable. Approval records `approvedBy` and `approvedAt` in the durable grant. Keep audit events separate and minimal. The SDK refuses login when these approval fields are absent, even if `enabled` was toggled.
+
+4. After approval, the application supplies a public handoff summary. The tester compares client, fingerprint, scopes and isolated account with the original request and the owner's approval summary. Any mismatch stops the test. A substituted key and its matching fingerprint are not sufficient if the original request is not independently checked by the tester and owner.
+
+5. The trusted local adapter creates short-lived sessions using fresh Ed25519 proofs. Every protected application request reloads the grant and checks account binding, scopes, approval, expiry and enabled state. Applications must supply one shared durable atomic nonce/session store; the memory example is for local development only.
+
+The application must enforce the account boundary even for direct HTTP calls. Task lists are conveniences. They do not prevent access to an unprotected application route. Never map an agent principal into a human or administrator account.
+
+## Local configuration and checks
+
+Use `examples/delegated-config.json`. Replace only the public handoff metadata and the absolute local identity path. Confirm the `expected` fingerprint matches the key generated in this runtime and scopes match the original request. Never replace the key to make a mismatched handoff pass.
 
 ```sh
 chmod 600 config.local.json
+node dist/main.js verify-config ./config.local.json local-tests sample https://app.example.com
 node dist/main.js list_projects ./config.local.json local-tests
+node dist/main.js probe ./config.local.json local-tests sample https://app.example.com
 node dist/main.js shell ./config.local.json local-tests
 ```
 
-Send one JSON object per line:
+`verify-config` checks the local key and the independently supplied expected origin; it does not approve anything. The probe requires the application's isolated `/agentdoor/records` API. It tests scoped writes, cross-account denial, a fresh session, remote revocation and rejection of the old cookie. It returns booleans only; cookies and signed proofs stay inside the trusted process.
+
+Send one JSON object per line to the same persistent shell process:
 
 ```json
 {"command":"start_test_session","input":{"project":"sample"}}
-{"command":"run_task","input":{"handle":"RETURNED_HANDLE","task":"dashboard-visible"}}
-{"command":"session_status","input":{"handle":"RETURNED_HANDLE"}}
+{"command":"run_task","input":{"handle":"RETURNED_HANDLE","task":"workspace-visible"}}
+{"command":"run_task","input":{"handle":"RETURNED_HANDLE","task":"save-test-record"}}
 {"command":"end_test_session","input":{"handle":"RETURNED_HANDLE"}}
 ```
 
-Only opaque handles and sanitized results are returned. The trusted browser adapter signs a fresh request and receives an HttpOnly cookie directly. No password, OTP, personal browser state or authentication link is passed through the model. Local cryptographic credentials still exist; this is not credential-free authentication.
-
-## Owner control and revocation
-
-The SDK calls the application's `getGrant` callback on **every protected request**, not just login. The owner can change scopes, disable a grant or shorten its expiry. Existing sessions immediately follow the updated policy when they make their next request. Changing the bound account, agent ID or public key invalidates existing sessions.
-
-Every protected application/API route must call `authorize(request, requiredScope)` and use the returned account ID for data access. UI task allowlists alone do not enforce permissions. Permissions do not affect already-running work or unrelated application sessions; long-running operations need application-side cancellation and budget enforcement.
-
-For delegated access, ending a handle calls the application's revoke endpoint before browser cleanup. A successful response reports `remoteRevocation: "confirmed"`. Failure is reported as `cleanup_failed`, not success. Ending an enrollment-based Clerk handle still reports `not_verified` for remote revocation.
+Successful delegated cleanup reports `remoteRevocation: "confirmed"`. Failed remote cleanup closes local browser resources but returns `cleanup_failed`; it must not be reported as revocation success.
 
 ## MCP
 
+Use the trusted launcher under a separate OS account. Give the untrusted agent only this interface, not that account's shell or key directory.
+
 ```json
-{
-  "mcpServers": {
-    "agentdoor": {
-      "command": "node",
-      "args": [
-        "/absolute/path/AgentHatch/dist/main.js",
-        "mcp",
-        "/absolute/path/config.local.json",
-        "local-tests"
-      ]
-    }
-  }
-}
+{"mcpServers":{"agenthatch":{"command":"node","args":["/absolute/path/AgentHatch/dist/main.js","mcp","/absolute/private/config.local.json","local-tests"]}}}
 ```
 
-Tools: `list_projects`, `start_test_session`, `session_status`, `run_task`, `end_test_session`.
+Tools: `list_projects`, `start_test_session`, `session_status`, `run_task`, `end_test_session`. Local stdio only; no remote cloud connector is claimed.
 
-Local stdio only. Client labels are trusted-launcher policy labels, not credentials. The OS must restrict config, identity and process access. An agent with arbitrary shell access as the owner can read owner files and is outside this boundary. Remote ChatGPT/Claude cloud connectors are not implemented or claimed.
-
-## Legacy Clerk enrollment
-
-Use `examples/config.json`, select a dedicated Clerk test account and explicitly allowlist its application and Clerk resource origins. Then run:
+## Verification
 
 ```sh
-node dist/main.js enroll ./config.local.json local-tests sample
-```
-
-A human must sign in in the opened browser. Browser state is saved under `~/.agentdoor/` and is sensitive. This mode requires no application SDK integration but does not supply delegated application permissions or remote session revocation. It does not satisfy passwordless agent onboarding.
-
-## Verification and limits
-
-```sh
-npm test
+npm run privacy:check
 npm run typecheck
-npm run build
+npm test
 npm run test:browser
 ```
 
-The default suite covers cryptographic verification, replay rejection, scope changes, account binding, expiration, server-side revocation, real HTTP integration, local policy handling and the actual SDK MCP handshake. Existing browser fixtures are mocked; the HTTP authorization tests use real requests and signatures.
+Browser tests launch actual Chromium against a local synthetic application. No production credentials are required. Each SDK instance limits session creation to 60 attempts per minute; applications must supply shared `admitSession` and ingress limits for distributed deployments.
 
-`test:browser` launches real Chromium against `examples/delegated-app.mjs`. It tests automatic agent login, scoped writes, a fresh session, owner policy changes and remote revocation. It requires a successful Playwright Chromium installation. It is separate from the default suite and must not be reported as passing when browser installation or launch fails.
-
-The local example uses in-memory data and a single-process session/replay store. Production applications must supply shared, durable, atomic storage, TLS, ingress rate limits and tenant isolation. No external application has yet been verified with the delegated adapter. This release has not received an independent security audit.
-
-Each SDK instance rejects session-creation attempts above 60 per minute. Supply `admitSession(request)` for a shared production admission check in addition to ingress limits; the local counter cannot coordinate multiple workers. A denied shared check returns HTTP 429 before proof parsing. Revocation failure still closes local browser resources and is reported as a cleanup failure.
-
-See [SECURITY.md](SECURITY.md) for the trust boundary and disclosure guidance.
+This pre-1.0 project is unaudited. The signed protocol is project-specific, not OAuth. It cannot isolate an agent that shares the signing account's OS privileges, guarantee an application's route coverage, impose a model budget by itself, or cancel already-running external work. See [SECURITY.md](SECURITY.md), [application integration](docs/application-integration.md) and [contribution rules](CONTRIBUTING.md).

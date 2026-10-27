@@ -9,14 +9,42 @@
       "origin": "https://app.example.com",
       "resourceOrigins": [],
       "loginPath": "/agentdoor/session",
-      "dashboardPath": "/dashboard",
+      "dashboardPath": "/agentdoor/workspace",
       "accountId": "user_agenttest",
       "sessionSeconds": 300,
-      "clients": ["local-tests"],
+      "clients": [
+        "local-tests"
+      ],
       "tasks": {
-        "dashboard-visible": {
-          "steps": [{"kind": "visible", "selector": "main h1"}]
+        "workspace-visible": {
+          "steps": [
+            {
+              "kind": "visible",
+              "selector": "main h1"
+            }
+          ]
+        },
+        "save-test-record": {
+          "steps": [
+            {
+              "kind": "fill",
+              "selector": "input[name=\"note\"]",
+              "value": "Synthetic test note"
+            },
+            {
+              "kind": "click",
+              "selector": "[data-action=\"save-test-note\"]"
+            }
+          ]
         }
+      },
+      "expected": {
+        "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "agentId": "sample-agent",
+        "scopes": [
+          "workspace:read",
+          "test-records:write"
+        ]
       }
     }
   }
