@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import type {Config} from './config.js';
 import {signSessionRequest} from './identity.js';
 /** Trusted helper only: never return cookies, proofs or upstream error bodies. */
@@ -15,7 +16,7 @@ export async function probe(p:Config['projects'][string]) {
  };
  try{
   await login();if((await call(p.dashboardPath)).status!==200)throw Error('WORKSPACE_FAILED');
-  const note='Synthetic persistence check';const saved=await call('/agentdoor/records','POST',{note});if(![200,303].includes(saved.status))throw Error('WRITE_FAILED');
+  const note='Synthetic persistence check '+randomUUID();const saved=await call('/agentdoor/records','POST',{note});if(![200,303].includes(saved.status))throw Error('WRITE_FAILED');
   if((await call('/agentdoor/records','POST',{note,accountId:'user_other'})).status!==403)throw Error('ACCOUNT_BOUNDARY_FAILED');
   await revoke();await login();const rows=await call('/agentdoor/records');if(rows.status!==200||!(await rows.json()).records.some((r:{note:string})=>r.note===note))throw Error('PERSISTENCE_FAILED');
   await revoke();return {authenticated:true,isolatedWrite:true,crossAccountDenied:true,freshSessionPersistence:true,remoteRevocation:true,oldSessionRejected:true};
