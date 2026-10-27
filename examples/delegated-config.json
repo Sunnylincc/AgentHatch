@@ -1,0 +1,23 @@
+{
+  "projects": {
+    "sample": {
+      "auth": {
+        "mode": "delegated",
+        "grantId": "qa-grant",
+        "identityFile": "/absolute/private/agentdoor-identity/identity.local.pem"
+      },
+      "origin": "https://app.example.com",
+      "resourceOrigins": [],
+      "loginPath": "/agentdoor/session",
+      "dashboardPath": "/dashboard",
+      "accountId": "user_agenttest",
+      "sessionSeconds": 300,
+      "clients": ["local-tests"],
+      "tasks": {
+        "dashboard-visible": {
+          "steps": [{"kind": "visible", "selector": "main h1"}]
+        }
+      }
+    }
+  }
+}
