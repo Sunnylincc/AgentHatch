@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "sample": {
+      "origin": "https://app.example.com",
+      "resourceOrigins": ["https://identity.example.com"],
+      "loginPath": "/sign-in",
+      "dashboardPath": "/dashboard",
+      "accountId": "user_REPLACE",
+      "sessionSeconds": 300,
+      "clients": ["local-tests"],
+      "tasks": {
+        "dashboard-visible": {
+          "steps": [{"kind": "visible", "selector": "main h1"}]
+        }
+      }
+    }
+  }
+}
