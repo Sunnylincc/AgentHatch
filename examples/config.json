@@ -1,17 +1,50 @@
 {
   "projects": {
     "sample": {
+      "auth": {
+        "mode": "delegated",
+        "grantId": "qa-grant",
+        "identityFile": "/absolute/private/agentdoor-identity/identity.local.pem"
+      },
       "origin": "https://app.example.com",
-      "resourceOrigins": ["https://identity.example.com"],
-      "loginPath": "/sign-in",
-      "dashboardPath": "/dashboard",
-      "accountId": "user_REPLACE",
+      "resourceOrigins": [],
+      "loginPath": "/agentdoor/session",
+      "dashboardPath": "/agentdoor/workspace",
+      "accountId": "user_agenttest",
       "sessionSeconds": 300,
-      "clients": ["local-tests"],
+      "clients": [
+        "local-tests"
+      ],
       "tasks": {
-        "dashboard-visible": {
-          "steps": [{"kind": "visible", "selector": "main h1"}]
+        "workspace-visible": {
+          "steps": [
+            {
+              "kind": "visible",
+              "selector": "main h1"
+            }
+          ]
+        },
+        "save-test-record": {
+          "steps": [
+            {
+              "kind": "fill",
+              "selector": "input[name=\"note\"]",
+              "value": "Synthetic test note"
+            },
+            {
+              "kind": "click",
+              "selector": "[data-action=\"save-test-note\"]"
+            }
+          ]
         }
+      },
+      "expected": {
+        "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "agentId": "sample-agent",
+        "scopes": [
+          "workspace:read",
+          "test-records:write"
+        ]
       }
     }
   }
