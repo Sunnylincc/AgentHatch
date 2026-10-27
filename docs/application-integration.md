@@ -18,6 +18,8 @@ const grants: Grant[] = [
     scopes: ["portfolio:read"],
     expiresAt: Date.now() + 60 * 60 * 1000,
     enabled: true,
+    approvedBy: verifiedHumanOwnerId,
+    approvedAt: Date.now(),
   },
 ];
 
@@ -78,3 +80,7 @@ Implement `DelegationStore` with shared storage before using multiple workers or
 Run it with `AGENTDOOR_GRANTS_FILE=/absolute/path/grants.local.json node examples/delegated-app.mjs`. It prints a non-secret loopback origin. The grants file contains an array of `Grant` records. Use that exact origin and the corresponding identifiers in the private CLI configuration.
 
 Run `npm run test:browser` for an automated real-browser example. The test creates temporary identities and grants and cleans them up. It performs no external provider login or model call.
+
+## Approval boundary
+
+Use `prepareEnrollment` only to create a disabled pending record. Never accept `enabled`, an account ID, approval metadata or expanded scopes from enrollment input. The application owns the durable registry and human-only approval surface. Record the approver and timestamp in the grant, and keep event logs to the five fields listed in SECURITY.md. Recompute the public-key fingerprint for display before approval. Reject any agent cookie on owner routes and require the allowlisted human session on server-side mutations as well. No CLI command approves a request.
