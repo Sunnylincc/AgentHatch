@@ -10,7 +10,11 @@ export interface Grant {
   scopes: string[];
   expiresAt: number;
   enabled: boolean;
+  approvedBy?: string;
+  approvedAt?: number;
+  paidModelCapMicrousd?: number;
 }
+export { prepareEnrollment, fingerprintPublicKey } from "./enrollment.js";
 export interface AgentPrincipal {
   agentId: string;
   userId: string;
@@ -149,6 +153,7 @@ export function createDelegation(options: {
     if (
       !g ||
       !g.enabled ||
+      !g.approvedBy || !g.approvedAt ||
       g.expiresAt <= Date.now() ||
       binding(g) !== s.binding
     )
@@ -217,6 +222,7 @@ export function createDelegation(options: {
             !g ||
             g.id !== c.grantId ||
             !g.enabled ||
+            !g.approvedBy || !g.approvedAt ||
             g.expiresAt <= Date.now()
           )
             throw new AgentAccessDenied();
@@ -262,6 +268,9 @@ export function createDelegation(options: {
             userId: g.userId,
             grantId: g.id,
             expiresAt: s.expiresAt,
+            fingerprint: createHash("sha256").update(createPublicKey(g.publicKey).export({format:"der",type:"spki"})).digest("base64"),
+            scopes: g.scopes,
+            paidModelCapMicrousd: g.paidModelCapMicrousd ?? 0,
           });
         }
         if (path === "/agentdoor/revoke" && request.method === "POST") {
