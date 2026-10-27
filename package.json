@@ -9,6 +9,7 @@
     "test": "tests"
   },
   "scripts": {
+    "privacy:check": "node scripts/privacy-check.mjs",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --import tsx --test tests/*.test.ts",
