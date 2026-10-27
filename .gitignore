@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.env*
+*.local.json
+playwright-report/
+test-results/
+identity.local.pem
+.agentdoor/
+
+# Local credentials and browser artifacts
+*.pem
+*.key
+*.p12
+*.pfx
+*.har
+storage-state*.json
+storageState*.json
+auth-state*.json
+cookies*.json
+traces/
