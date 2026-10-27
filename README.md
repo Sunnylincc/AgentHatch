@@ -4,6 +4,8 @@ Controlled test access for AI-assisted application development.
 
 A free, MIT-licensed developer library with a local CLI and stdio MCP interface. Application owners control agent identities and access policies. No hosted AgentDoor account or subscription is required.
 
+The existing `agentdoor` CLI, MCP tool names and SDK exports are retained for compatibility. See [runtime isolation](docs/runtime-isolation.md) before granting access, and [contribution guidelines](CONTRIBUTING.md) before submitting changes. The project does not include a hosted issuer or owner approval console.
+
 ## Status: 0.2
 
 Two adapters are available:
@@ -114,5 +116,7 @@ The default suite covers cryptographic verification, replay rejection, scope cha
 `test:browser` launches real Chromium against `examples/delegated-app.mjs`. It tests automatic agent login, scoped writes, a fresh session, owner policy changes and remote revocation. It requires a successful Playwright Chromium installation. It is separate from the default suite and must not be reported as passing when browser installation or launch fails.
 
 The local example uses in-memory data and a single-process session/replay store. Production applications must supply shared, durable, atomic storage, TLS, ingress rate limits and tenant isolation. No external application has yet been verified with the delegated adapter. This release has not received an independent security audit.
+
+Each SDK instance rejects session-creation attempts above 60 per minute. Supply `admitSession(request)` for a shared production admission check in addition to ingress limits; the local counter cannot coordinate multiple workers. A denied shared check returns HTTP 429 before proof parsing. Revocation failure still closes local browser resources and is reported as a cleanup failure.
 
 See [SECURITY.md](SECURITY.md) for the trust boundary and disclosure guidance.
