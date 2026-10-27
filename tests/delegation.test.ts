@@ -17,7 +17,7 @@ function setup() {
       .export({ type: "spki", format: "pem" })
       .toString(),
     scopes: ["portfolio:read"],
-    enabled: true,
+    enabled: true, approvedBy: "user_owner", approvedAt: Date.now(),
     expiresAt: Date.now() + 600000,
   };
   const origin = "https://app.example.com",
@@ -198,7 +198,7 @@ test("HTTP application integration logs in, enforces scopes, rechecks owner poli
         .export({ type: "spki", format: "pem" })
         .toString(),
       scopes: ["read"],
-      enabled: true,
+      enabled: true, approvedBy: "user_owner", approvedAt: Date.now(),
       expiresAt: Date.now() + 60000,
     };
   let sdk: ReturnType<typeof createDelegation>,
