@@ -5,11 +5,10 @@ import { z } from "zod";
 import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { resolve, join } from "node:path";
-import { chmod, rename } from "node:fs/promises";
-import { chromium } from "playwright";
-import { initializeIdentity } from "./identity.js";
+import { initializeIdentity, identityFingerprint } from "./identity.js";
+import { probe } from "./probe.js";
 import { AgentDoor } from "./core.js";
-import { ClerkBrowser, identity, privateDirectory } from "./browser.js";
+import { DelegatedBrowser } from "./browser.js";
 import { loadConfig, destination } from "./config.js";
 process.umask(0o077);
 const [command, configPath, client, ...args] = process.argv.slice(2);
@@ -36,47 +35,16 @@ async function main() {
   if (!configPath || !client) throw new Error("USAGE");
   const config = await loadConfig(resolve(configPath));
   const root = join(homedir(), ".agentdoor");
-  if (command === "enroll") {
-    if (config.projects[args[0]]?.auth)
-      throw Error("DELEGATED_PROJECT_NEEDS_NO_ENROLLMENT");
-    if (!process.stdin.isTTY) throw new Error("INTERACTIVE_TERMINAL_REQUIRED");
-    const project = args[0],
-      p = config.projects[project];
-    if (!p || !p.clients.includes(client)) throw new Error("ACCESS_DENIED");
-    await privateDirectory(root);
-    const browser = await chromium.launch({ headless: false });
-    try {
-      const context = await browser.newContext();
-      const page = await context.newPage();
-      await page.goto(destination(p.origin, p.loginPath));
-      const rl = createInterface({
-        input: process.stdin,
-        output: process.stderr,
-      });
-      try {
-        await rl.question(
-          "Sign in manually with the dedicated test account, then press Enter here. ",
-        );
-      } finally {
-        rl.close();
-      }
-      if (
-        new URL(page.url()).origin !== p.origin ||
-        (await identity(page)) !== p.accountId
-      )
-        throw new Error("ACCOUNT_DENIED");
-      const file = join(root, project + ".json");
-      const temp = file + "." + crypto.randomUUID() + ".tmp";
-      await context.storageState({ path: temp });
-      await chmod(temp, 0o600);
-      await rename(temp, file);
-      process.stdout.write('{"enrolled":true}\n');
-    } finally {
-      await browser.close();
-    }
+  if (command === "probe" || command === "verify-config") {
+    const p = config.projects[args[0]];
+    if (!p || !p.clients.includes(client) || !p.auth || !p.expected || p.origin !== args[1]) throw Error("CONFIG_DENIED");
+    if (await identityFingerprint(p.auth.identityFile) !== p.expected.fingerprint) throw Error("KEY_SUBSTITUTION_DENIED");
+    if (command === "verify-config") process.stdout.write(JSON.stringify({verified:true,project:args[0],grantId:p.auth.grantId,accountId:p.accountId,fingerprint:p.expected.fingerprint,scopes:p.expected.scopes})+"\n");
+    else process.stdout.write(JSON.stringify(await probe(p))+"\n");
     return;
   }
-  const door = new AgentDoor(config, client, new ClerkBrowser(root));
+
+  const door = new AgentDoor(config, client, new DelegatedBrowser(root));
   const dispatch = async (name: string, input: unknown) => {
     if (!(name in inputs)) throw new Error("COMMAND_DENIED");
     const data = (inputs as Record<string, z.ZodType>)[name].parse(
@@ -113,7 +81,7 @@ async function main() {
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
   if (command === "mcp") {
-    const server = new McpServer({ name: "agentdoor", version: "0.2.0" });
+    const server = new McpServer({ name: "agenthatch", version: "0.3.0" });
     for (const [name, schema] of Object.entries(inputs))
       server.registerTool(
         name,
@@ -160,7 +128,7 @@ async function main() {
 }
 main().catch(() => {
   process.stderr.write(
-    "AgentDoor failed. Usage: agentdoor <identity:init|enroll|shell|mcp|list_projects> <private-config.json> <configured-client> [project]. No upstream details are printed.\n",
+    "AgentDoor failed. Usage: agentdoor <identity:init|verify-config|probe|shell|mcp|list_projects> <private-config.json> <configured-client> [project]. No upstream details are printed.\n",
   );
   process.exitCode = 1;
 });
