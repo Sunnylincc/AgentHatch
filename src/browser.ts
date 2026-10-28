@@ -20,6 +20,21 @@ export async function identity(page: Page): Promise<string | null> {
     return c?.user?.id ?? null;
   });
 }
+function chromiumLaunchOptions() {
+  const raw = process.env.HTTPS_PROXY || process.env.HTTP_PROXY ||
+    process.env.https_proxy || process.env.http_proxy;
+  if (!raw) return { headless: true };
+  const url = new URL(raw);
+  if (url.protocol !== "http:") throw new Error("UNSUPPORTED_PROXY_SCHEME");
+  return {
+    headless: true,
+    proxy: {
+      server: url.origin,
+      username: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+    },
+  };
+}
 export class ClerkBrowser implements BrowserAdapter {
   constructor(private root: string) {}
   async open(
@@ -36,7 +51,7 @@ export class ClerkBrowser implements BrowserAdapter {
       (process.platform !== "win32" && stat.mode & 0o077)
     )
       throw new Error("STATE_PERMISSIONS");
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch(chromiumLaunchOptions());
     let context: BrowserContext | undefined;
     try {
       context = await browser.newContext({
@@ -93,7 +108,7 @@ export class ClerkBrowser implements BrowserAdapter {
     p: Config["projects"][string],
   ): Promise<BrowserSession> {
     if (!p.auth) throw Error("DELEGATION_REQUIRED");
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch(chromiumLaunchOptions());
     let context: BrowserContext | undefined;
     let authenticated = false;
     try {
