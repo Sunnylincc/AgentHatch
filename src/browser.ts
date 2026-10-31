@@ -2,6 +2,8 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import { mkdir, chmod, lstat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Config } from "./config.js";
+import { chromiumProxy } from "./proxy.js";
+import { runSteps } from "./task-runner.js";
 import { identityFingerprint, signSessionRequest } from "./identity.js";
 import { destination } from "./config.js";
 import { revokeAndClose } from "./cleanup.js";
@@ -27,7 +29,7 @@ export class DelegatedBrowser implements BrowserAdapter {
   ): Promise<BrowserSession> {
     if (!p.auth) throw Error("DELEGATION_REQUIRED");
     if (p.expected && await identityFingerprint(p.auth.identityFile) !== p.expected.fingerprint) throw Error("KEY_SUBSTITUTION_DENIED");
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ headless: true, proxy: chromiumProxy() });
     let context: BrowserContext | undefined;
     let authenticated = false;
     try {
@@ -76,15 +78,7 @@ export class DelegatedBrowser implements BrowserAdapter {
         remoteRevocation: true,
         identity: who,
         run: async (steps: Step[]) => {
-          for (const step of steps) {
-            if (new URL(page.url()).origin !== p.origin)
-              throw Error("ORIGIN_DENIED");
-            const loc = page.locator(step.selector);
-            if (step.kind === "visible") {
-              await loc.waitFor({ state: "visible" });
-            } else if (step.kind === "click") await loc.click();
-            else await loc.fill(step.value);
-          }
+          await runSteps(page, steps, p.origin);
           if (
             new URL(page.url()).origin !== p.origin ||
             (await who()) !== p.accountId

@@ -21,6 +21,8 @@ const step = z.discriminatedUnion("kind", [
       selector: z.string().min(1).max(500),
     })
     .strict(),
+  z.object({ kind: z.literal("hidden"), selector: z.string().min(1).max(500) }).strict(),
+  z.object({ kind: z.literal("assert-text"), selector: z.string().min(1).max(500), value: z.string().min(1).max(1000) }).strict(),
   z
     .object({ kind: z.literal("click"), selector: z.string().min(1).max(500) })
     .strict(),
@@ -48,7 +50,7 @@ export const schema = z
           expected: z.object({
             fingerprint:z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
             agentId:alias,
-            scopes:z.array(z.enum(["workspace:read","test-records:write"])).min(1).max(2),
+            scopes:z.array(z.string().regex(/^[a-z][a-z0-9_-]{0,31}:[a-z][a-z0-9_-]{0,31}$/)).min(1).max(2),
           }).strict().optional(),
           origin,
           resourceOrigins: z.array(origin).max(10),

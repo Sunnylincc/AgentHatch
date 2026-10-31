@@ -15,6 +15,8 @@ export interface Grant {
   paidModelCapMicrousd?: number;
 }
 export { prepareEnrollment, fingerprintPublicKey } from "./enrollment.js";
+export { RedisDelegationStore } from "./redis-store.js";
+export type { RedisCommandClient } from "./redis-store.js";
 export interface AgentPrincipal {
   agentId: string;
   userId: string;
