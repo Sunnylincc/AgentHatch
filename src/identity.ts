@@ -3,6 +3,8 @@ import {
   sign,
   randomUUID,
   createPrivateKey,
+  createPublicKey,
+  createHash,
 } from "node:crypto";
 import { mkdir, writeFile, lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -58,4 +60,12 @@ export async function signSessionRequest(
     payload,
     signature: sign(null, Buffer.from(payload), key).toString("base64url"),
   };
+}
+
+export async function identityFingerprint(file: string) {
+  const stat = await lstat(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096 || (process.platform !== "win32" && (stat.mode & 0o077))) throw Error("IDENTITY_FILE_DENIED");
+  const key = createPrivateKey(await readFile(file));
+  if (key.asymmetricKeyType !== "ed25519") throw Error("IDENTITY_KEY_DENIED");
+  return createHash("sha256").update(createPublicKey(key).export({type:"spki",format:"der"})).digest("base64");
 }

@@ -2,7 +2,7 @@ import { chromium, type BrowserContext, type Page } from "playwright";
 import { mkdir, chmod, lstat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Config } from "./config.js";
-import { signSessionRequest } from "./identity.js";
+import { identityFingerprint, signSessionRequest } from "./identity.js";
 import { destination } from "./config.js";
 import { revokeAndClose } from "./cleanup.js";
 import type { BrowserAdapter, BrowserSession, Step } from "./core.js";
@@ -13,86 +13,20 @@ export async function privateDirectory(path: string) {
     throw new Error("STATE_DIRECTORY_DENIED");
   await chmod(path, 0o700);
 }
-export async function identity(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
-    const c = (window as unknown as { Clerk?: { user?: { id: string } } })
-      .Clerk;
-    return c?.user?.id ?? null;
-  });
-}
-export class ClerkBrowser implements BrowserAdapter {
+export class DelegatedBrowser implements BrowserAdapter {
   constructor(private root: string) {}
   async open(
     project: string,
     p: Config["projects"][string],
   ): Promise<BrowserSession> {
-    await privateDirectory(this.root);
-    if (p.auth) return this.delegated(p);
-    const state = join(this.root, project + ".json");
-    const stat = await lstat(state);
-    if (
-      stat.isSymbolicLink() ||
-      !stat.isFile() ||
-      (process.platform !== "win32" && stat.mode & 0o077)
-    )
-      throw new Error("STATE_PERMISSIONS");
-    const browser = await chromium.launch({ headless: true });
-    let context: BrowserContext | undefined;
-    try {
-      context = await browser.newContext({
-        storageState: state,
-        serviceWorkers: "block",
-        acceptDownloads: false,
-      });
-      // No external identity-provider requests are needed after enrollment. Block other origins.
-      await context.route("**/*", async (route) => {
-        const u = new URL(route.request().url());
-        if (![p.origin, ...p.resourceOrigins].includes(u.origin))
-          return route.abort();
-        return route.continue();
-      });
-      const page = await context.newPage();
-      page.setDefaultTimeout(10000);
-      await page.goto(destination(p.origin, p.dashboardPath), {
-        waitUntil: "domcontentloaded",
-        timeout: 20000,
-      });
-      await page.waitForFunction(
-        () =>
-          !!(window as unknown as { Clerk?: { loaded: boolean } }).Clerk
-            ?.loaded,
-        {},
-        { timeout: 15000 },
-      );
-      const ctx = context;
-      return {
-        identity: () => identity(page),
-        run: async (steps: Step[]) => {
-          for (const step of steps) {
-            if (new URL(page.url()).origin !== p.origin)
-              throw new Error("ORIGIN_DENIED");
-            const loc = page.locator(step.selector);
-            if (step.kind === "visible") {
-              await loc.waitFor({ state: "visible" });
-            } else if (step.kind === "click") await loc.click();
-            else await loc.fill(step.value);
-          }
-        },
-        close: async () => {
-          await ctx.close();
-          await browser.close();
-        },
-      };
-    } catch {
-      await context?.close().catch(() => {});
-      await browser.close();
-      throw new Error("BROWSER_SETUP_FAILED");
-    }
+    if (!p.auth) throw Error("DELEGATION_REQUIRED");
+    return this.delegated(p);
   }
   private async delegated(
     p: Config["projects"][string],
   ): Promise<BrowserSession> {
     if (!p.auth) throw Error("DELEGATION_REQUIRED");
+    if (p.expected && await identityFingerprint(p.auth.identityFile) !== p.expected.fingerprint) throw Error("KEY_SUBSTITUTION_DENIED");
     const browser = await chromium.launch({ headless: true });
     let context: BrowserContext | undefined;
     let authenticated = false;
@@ -127,6 +61,7 @@ export class ClerkBrowser implements BrowserAdapter {
         });
         if (r.status() !== 200) return null;
         const data = await r.json();
+        if (p.expected && (data.fingerprint !== p.expected.fingerprint || data.agentId !== p.expected.agentId || data.paidModelCapMicrousd !== 0 || JSON.stringify([...(data.scopes ?? [])].sort()) !== JSON.stringify([...p.expected.scopes].sort()))) return null;
         return data.grantId === p.auth?.grantId ? (data.userId ?? null) : null;
       };
       if ((await who()) !== p.accountId) throw Error("ACCOUNT_DENIED");

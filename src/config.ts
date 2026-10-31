@@ -44,8 +44,12 @@ export const schema = z
               grantId: z.string().min(1).max(128),
               identityFile: z.string().min(1).max(4096).refine(isAbsolute),
             })
-            .strict()
-            .optional(),
+            .strict(),
+          expected: z.object({
+            fingerprint:z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
+            agentId:alias,
+            scopes:z.array(z.enum(["workspace:read","test-records:write"])).min(1).max(2),
+          }).strict().optional(),
           origin,
           resourceOrigins: z.array(origin).max(10),
           loginPath: z.string().regex(/^\/(?!\/)[^?#]*$/),

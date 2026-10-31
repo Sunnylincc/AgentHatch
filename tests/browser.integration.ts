@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { initializeIdentity } from "../src/identity.js";
-import { ClerkBrowser } from "../src/browser.js";
+import { DelegatedBrowser } from "../src/browser.js";
 import { AgentDoor } from "../src/core.js";
 import type { Config } from "../src/config.js";
 import type { Grant } from "../src/delegation.js";
@@ -19,7 +19,7 @@ test("real Chromium: no human login, authenticated task, fresh session, scope ed
     agentId: "browser-agent",
     publicKey: await readFile(paths.publicFile, "utf8"),
     scopes: ["notes:read", "notes:write"],
-    enabled: true,
+    enabled: true, approvedBy: "user_owner", approvedAt: Date.now(),
     expiresAt: Date.now() + 300000,
   };
   const file = join(root, "grants.local.json");
@@ -88,7 +88,7 @@ test("real Chromium: no human login, authenticated task, fresh session, scope ed
         },
       },
     };
-    door = new AgentDoor(config, "qa", new ClerkBrowser(join(root, "states")));
+    door = new AgentDoor(config, "qa", new DelegatedBrowser(join(root, "states")));
     const first = await door.start("sample");
     assert.equal(first.state, "active");
     await door.run(first.handle, "read");
