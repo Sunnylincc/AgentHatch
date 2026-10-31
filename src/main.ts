@@ -6,6 +6,8 @@ import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { resolve, join } from "node:path";
 import { initializeIdentity, identityFingerprint } from "./identity.js";
+import { createConfigTemplate, doctor } from "./cli.js";
+import { publicError } from "./error.js";
 import { probe } from "./probe.js";
 import { AgentDoor } from "./core.js";
 import { DelegatedBrowser } from "./browser.js";
@@ -23,6 +25,11 @@ const inputs = {
     .strict(),
 };
 async function main() {
+  if (command === "init") {
+    if (!configPath) throw Error("USAGE");
+    process.stdout.write(JSON.stringify({ created: true, configFile: await createConfigTemplate(configPath) }) + "\n");
+    return;
+  }
   if (command === "identity:init") {
     if (!configPath) throw Error("USAGE");
     const result = await initializeIdentity(resolve(configPath));
@@ -35,6 +42,16 @@ async function main() {
   if (!configPath || !client) throw new Error("USAGE");
   const config = await loadConfig(resolve(configPath));
   const root = join(homedir(), ".agentdoor");
+  if (command === "doctor") {
+    const result = await doctor(config, client, args[0], args[1], args[2] === "--network");
+    process.stdout.write(JSON.stringify(result) + "\n");
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (command === "status") {
+    process.stdout.write(JSON.stringify({ projects: new AgentDoor(config, client, new DelegatedBrowser(root)).list() }) + "\n");
+    return;
+  }
   if (command === "probe" || command === "verify-config") {
     const p = config.projects[args[0]];
     if (!p || !p.clients.includes(client) || !p.auth || !p.expected || p.origin !== args[1]) throw Error("CONFIG_DENIED");
@@ -66,10 +83,10 @@ async function main() {
   const safe = async (name: string, input: unknown) => {
     try {
       return { ok: true, result: await dispatch(name, input) };
-    } catch {
+    } catch (e) {
       return {
         ok: false,
-        error: "REQUEST_FAILED",
+        error: publicError(e),
         hint: "Check local configuration, enrollment, account permissions, task selectors, and session lifetime.",
       };
     }
@@ -81,7 +98,7 @@ async function main() {
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
   if (command === "mcp") {
-    const server = new McpServer({ name: "agenthatch", version: "0.3.0" });
+    const server = new McpServer({ name: "agenthatch", version: "0.4.0" });
     for (const [name, schema] of Object.entries(inputs))
       server.registerTool(
         name,
@@ -128,7 +145,7 @@ async function main() {
 }
 main().catch(() => {
   process.stderr.write(
-    "AgentDoor failed. Usage: agentdoor <identity:init|verify-config|probe|shell|mcp|list_projects> <private-config.json> <configured-client> [project]. No upstream details are printed.\n",
+    "AgentDoor failed. Usage: agentdoor <init|identity:init|doctor|status|verify-config|probe|shell|mcp|list_projects> <private-config.json> <configured-client> [project]. No upstream details are printed.\n",
   );
   process.exitCode = 1;
 });

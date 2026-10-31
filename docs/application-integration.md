@@ -7,7 +7,7 @@ This SDK is for applications whose owners explicitly choose to support agent acc
 The owner receives only an agent's public key and creates an application-side grant:
 
 ```ts
-import { createDelegation, MemoryDelegationStore, type Grant } from "agentdoor";
+import { createDelegation, MemoryDelegationStore, type Grant } from "agenthatch";
 
 const grants: Grant[] = [
   {
@@ -71,7 +71,7 @@ Implement `DelegationStore` with shared storage before using multiple workers or
 - `get(hash)` and `delete(hash)` must observe revocation consistently.
 - Expire records and bound capacity.
 
-`MemoryDelegationStore` is a bounded, single-process development implementation. Restarting it invalidates sessions but loses replay history; it is not suitable for distributed or production use. Place ingress rate and body-size limits before these endpoints as well.
+Use `RedisDelegationStore` with a shared Redis client in distributed deployments; the store requires atomic `SET NX PX`, `GET`, and `DEL`. Redis must be secured, monitored, and configured for appropriate durability and memory limits. `MemoryDelegationStore` is a bounded, single-process development implementation. Restarting it invalidates sessions but loses replay history; it is not suitable for distributed or production use. Place ingress rate and body-size limits before these endpoints as well.
 
 ## Local executable example
 
@@ -84,3 +84,5 @@ Run `npm run test:browser` for an automated real-browser example. The test creat
 ## Approval boundary
 
 Use `prepareEnrollment` only to create a disabled pending record. Never accept `enabled`, an account ID, approval metadata or expanded scopes from enrollment input. The application owns the durable registry and human-only approval surface. Record the approver and timestamp in the grant, and keep event logs to the five fields listed in SECURITY.md. Recompute the public-key fingerprint for display before approval. Reject any agent cookie on owner routes and require the allowlisted human session on server-side mutations as well. No CLI command approves a request.
+
+For custom application permissions, explicitly pass the application-owned allowlist to `prepareEnrollment(request, { allowedScopes: ["documents:read", "documents:write"] })`. Never accept the registry or grant-enabling fields from the agent request.

@@ -1,7 +1,7 @@
 {
   "name": "agenthatch",
-  "version": "0.3.0",
-  "description": "Controlled test access for AI-assisted application development.",
+  "version": "0.4.0-rc.1",
+  "description": "Owner-approved, revocable AI agent accounts for application developers",
   "main": "dist/delegation.js",
   "directories": {
     "doc": "docs",
@@ -19,7 +19,14 @@
     "type": "git",
     "url": "git+https://github.com/Sunnylincc/AgentHatch.git"
   },
-  "keywords": [],
+  "keywords": [
+    "ai-agent",
+    "agent-identity",
+    "authorization",
+    "mcp",
+    "security",
+    "delegated-access"
+  ],
   "author": "",
   "license": "MIT",
   "type": "module",

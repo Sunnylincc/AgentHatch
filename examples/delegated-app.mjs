@@ -10,6 +10,7 @@ if (!file)
 let origin = "",
   sdk;
 const notes = new Map();
+const records = new Map();
 const escape = (s) =>
   String(s).replace(
     /[&<>"']/g,
@@ -37,7 +38,23 @@ const server = createServer(async (req, res) => {
       ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
     });
     let response;
-    if (req.url.startsWith("/agentdoor/")) response = await sdk.handle(request);
+    if (req.url === "/agentdoor/records") {
+      if (req.method !== "GET" && req.method !== "POST") throw Error("METHOD_DENIED");
+      const principal = await sdk.authorize(request, req.method === "POST" ? "test-records:write" : "workspace:read");
+      const own = records.get(principal.userId) ?? [];
+      if (req.method === "POST") {
+        const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (!data || Object.keys(data).length !== 1 || typeof data.note !== "string" ||
+            data.note.length < 1 || data.note.length > 500) throw Error("RECORD_DENIED");
+        own.push({ note: data.note });
+        records.set(principal.userId, own);
+      }
+      response = Response.json({ records: own }, { headers: { "Cache-Control": "no-store" } });
+    } else if (req.url === "/agentdoor/workspace" && req.method === "GET") {
+      const principal = await sdk.authorize(request, "workspace:read");
+      response = new Response("<main><h1>Isolated agent workspace</h1><p>" + escape(principal.userId) + "</p></main>",
+        { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    } else if (req.url.startsWith("/agentdoor/")) response = await sdk.handle(request);
     else if (req.url === "/dashboard" && req.method === "GET") {
       const p = await sdk.authorize(request, "notes:read");
       response = new Response(

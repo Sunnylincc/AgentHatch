@@ -2,7 +2,7 @@
 
 Controlled test access for AI-assisted application development. Free, open-source developer software under the MIT license. Application owners retain control of identities, permissions and revocation.
 
-## Status: 0.3
+## Status: 0.4.0 release candidate
 
 AgentHatch provides an application-side authorization SDK, local CLI and stdio MCP interface. It is not a hosted service, owner console, identity provider or cloud connector. Application-specific approval pages, databases and deployments belong in the consuming application's repository.
 
@@ -32,7 +32,7 @@ node dist/main.js identity:init /absolute/private/agent-identity
 
 Only its public key goes to the application owner. The private key never belongs in chat, Git, CI, a prompt, an environment variable or an agent-readable filesystem. Use a separate trusted signing/browser process. See [runtime isolation](docs/runtime-isolation.md).
 
-2. The application calls `prepareEnrollment({client, project, publicKey, scopes})` and persists the disabled result. A request, signed proof, local configuration or prompt grants no access. Supported enrollment scopes are `workspace:read` and `test-records:write`. The initial lifetime is one hour; applications must cap owner-selected lifetimes at seven days.
+2. The application calls `prepareEnrollment({client, project, publicKey, scopes})` and persists the disabled result. A request, signed proof, local configuration or prompt grants no access. The default sample registry supports `workspace:read` and `test-records:write`; applications may provide their own allowlisted scopes with `prepareEnrollment(input, { allowedScopes })`. The initial lifetime is one hour; applications must cap owner-selected lifetimes at seven days.
 
 3. The application's human-authenticated owner surface recomputes the fingerprint from the stored public key and displays the exact account, scopes, expiry and paid-model policy. Only an explicitly allowlisted human owner may approve, reject or disable. Approval records `approvedBy` and `approvedAt` in the durable grant. Keep audit events separate and minimal. The SDK refuses login when these approval fields are absent, even if `enabled` was toggled.
 
@@ -43,6 +43,10 @@ Only its public key goes to the application owner. The private key never belongs
 The application must enforce the account boundary even for direct HTTP calls. Task lists are conveniences. They do not prevent access to an unprotected application route. Never map an agent principal into a human or administrator account.
 
 ## Local configuration and checks
+
+The trusted owner can generate a starter template with `node dist/main.js init ./config.local.json` (does **not** generate credentials or approve access). Use `node dist/main.js doctor ./config.local.json local-tests sample https://app.example.com --network` for opt-in endpoint checks, or `node dist/main.js status ./config.local.json local-tests` for the configured task list.
+
+A Redis-backed adapter is exported as `RedisDelegationStore`; see [v0.4 migration](docs/v04-migration.md) for the production storage and scope registry contract.
 
 Use `examples/delegated-config.json`. Replace only the public handoff metadata and the absolute local identity path. Confirm the `expected` fingerprint matches the key generated in this runtime and scopes match the original request. Never replace the key to make a mismatched handoff pass.
 
@@ -89,3 +93,7 @@ npm run test:browser
 Browser tests launch actual Chromium against a local synthetic application. No production credentials are required. Each SDK instance limits session creation to 60 attempts per minute; applications must supply shared `admitSession` and ingress limits for distributed deployments.
 
 This pre-1.0 project is unaudited. The signed protocol is project-specific, not OAuth. It cannot isolate an agent that shares the signing account's OS privileges, guarantee an application's route coverage, impose a model budget by itself, or cancel already-running external work. See [SECURITY.md](SECURITY.md), [application integration](docs/application-integration.md) and [contribution rules](CONTRIBUTING.md).
+
+## v0.4 release candidate notes
+
+This release adds app-owned scope registries, a Redis-compatible shared store, opt-in diagnostics, trusted proxy support and owner-authored task assertions. The synthetic reference HTTP application has protected workspace/record APIs and can be tested using the same `probe` command. No independent security audit or external production application acceptance is claimed. See [migration guide](docs/v04-migration.md).
